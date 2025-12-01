@@ -12,8 +12,9 @@ let canvas;
 
 const socket = io();
 
+
 socket.on('startGift', (data) => {
-  
+
   console.log("startGift received on loading screen:", data);
 
   // Build URL for mobile.html with a query param
