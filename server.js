@@ -26,7 +26,7 @@ const DRINK_IMAGES = {
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: 'catherine.kwon@yale.edu', 
+    user: 'daye.catherine@gmail.com', 
     pass:'ovlo iljz luta igem',  
   },
 });
