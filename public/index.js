@@ -5,20 +5,30 @@ let cx = 650, cy = 600;
 let baseSize = 260;  
 let hoverAmt = 0;
 let clickAmt = 0;
+
 let latestSubmission = null;
 let orderTextStart = 0;
 let orderVisible = false;
 
+let isDraggingDrink = false;
+let dragStartY = 0;
+let isTransitioning = false;
+let transitionStart = 0;
+let transitionDuration = 500; // ms
+let transitionDir = 0;        // +1 = next, -1 = previous
+let prevDrinkIndex = 0;
+
 const socket = io();
+
+socket.on('connect', () => {
+    console.log("Main: connected, id =", socket.id);
+  });
+
 socket.on('giftWarmth', (data) => {
   latestSubmission = data;
-  latestSubmission.drink = drinks[currentDrink].name; // if you want!
-  showOrderTexts(latestSubmission.name || "Anonymous");
+  latestSubmission.drink = drinks[currentDrink].name; 
+  showOrderTexts(latestSubmission.name);
 });
-
-
-let giftText = "GIFT THIS!";
-let giftHitbox = { x: 0, y: 0, w: 0, h: 0 };
 
 // --------------------------------------------------------------------------------------------
 
@@ -40,32 +50,23 @@ function preload() {
   });
 }
 
-// -----------------------
+// TITLE: HELPER FUNCTIONS
 
-function setup() { 
+function computePositionTiming(lines, baseX, baseY, gapY, delayStepLetter, delayStepLine) {
 
-  createCanvas(900, 1600); // 900 x 1600 POSTER SIZE (VERTICAL)
-  textAlign(LEFT, TOP);
-  noStroke();
-
-  const lines   = ["GIFT", "a CUP","of", "WARMTH"];
-  const baseX   = 40;
-  const baseY   = 320;
-  const gapY    = 175;
-  const size    = 96;
-  const delayStepLetter = 60;   // ms between letters
-  const delayStepLine   = 300;  // extra gap per line
-
-  textSize(size);
-
-  let delay = 0;
   lines.forEach((line, li) => {
+
     let x = baseX;
     const y = baseY + li * gapY;
+    let delay = 0;
 
     for (const ch of line) {
       const w = textWidth(ch);
+
+      // FOR REGULAR CHARACTERS
       if (ch !== " ") {
+
+        // Add: character, x-y position, startTime, targetAngle
         letters.push({
           ch,
           x,
@@ -73,20 +74,46 @@ function setup() {
           startTime: millis() + delay,
           angleTarget: random(-PI / 32, PI / 32)
         });
+
         delay += delayStepLetter;
-      } else {
+      } 
+      
+      // FOR BLANK SPACES
+      else {
         delay += delayStepLetter * 0.3;
       }
+
       x += 1.7 * w;
     }
     delay += delayStepLine;
   });
+
 }
 
-function draw() {
-  background("#FCF5F0");
+function animateTitle(letters) {
+  textSize(200);
+  fill("#111");
+  letters.forEach(l => {
+    const t = millis() - l.startTime;
+    if (t < 0) return;
+    const dur = 600;
+    const u = constrain(t / dur, 0, 1);
+    const s = easeOutBack(u);
+    const angle = l.angleTarget * s;
 
-  // LOGO & CREDITS -----------------
+    push();
+      textSize(200);
+      fill("#111");
+      translate(l.x, l.y - 10); // tiny lift
+      scale(s);
+      rotate(angle);
+      text(l.ch, 0, 0);
+    pop();
+  });
+}
+
+// LOGO & CREDITS 
+function drawCredits() {
   fill("#644436");
   textFont("sans-serif");
   textStyle(BOLD);
@@ -98,106 +125,132 @@ function draw() {
     "GIFT A CUP® is a collaborative project between BULLDOG COFFEE COMPANY™ and the City of New Haven aimed at revitalizing the city's coffee market while keeping the community warm during record lows this winter.\n\nDesigned by STUDIOCAT 2025.",
     30, 1485, 840
   );
+}
 
-  // TITLE LETTERS -----------------
+
+
+// ------------------------------------------------------------------------------------------------------------
+// SETUP & DRAW FUNCTIONS
+// ------------------------------------------------------------------------------------------------------------
+
+function setup() { 
+
+  createCanvas(900, 1600); // 900 x 1600 POSTER SIZE (VERTICAL)
+  textAlign(LEFT, TOP);
+  noStroke();
+  textSize(96);
+
+  const lines   = ["GIFT", "a CUP","of", "WARMTH"];
+  const baseX   = 40;
+  const baseY   = 320;
+  const gapY    = 175;
+  const delayStepLetter = 60;  
+  const delayStepLine   = 300; 
+  computePositionTiming(lines, baseX, baseY, gapY, delayStepLetter, delayStepLine)
+
+}
+
+function draw() {
+
+  // BACKGROUND & CREDITS
+  background("#FCF5F0");
+  drawCredits()
+
+  // TITLE LETTERS 
   textSize(200);
   fill("#111");
-
-  letters.forEach(l => {
-    const t = millis() - l.startTime;
-    if (t < 0) return;
-
-    const dur = 600;
-    const u = constrain(t / dur, 0, 1);
-    const s = easeOutBack(u);
-    const angle = l.angleTarget * s;
-
-    push();
-    translate(l.x, l.y - 10); // tiny lift
-    scale(s);
-    rotate(angle);
-    text(l.ch, 0, 0);
-    pop();
-  });
-
+  animateTitle(letters)
 
   // FLOATING DRINK -----------------
   if (drinks.length > 0) {
-  const d = drinks[currentDrink];
+    const time = millis() / 1000;
+    const floatScale = 1 + 0.04 * sin(time * 2.0);
 
-  const t = millis() / 1000;
-  const floatScale = 1 + 0.04 * sin(t * 2.0);
+    const baseW = baseSize;
+    const dCurrent = drinks[currentDrink];
+    const ratioCurrent = dCurrent.img.height ? dCurrent.img.height / dCurrent.img.width : 1;
+    const baseHCurrent = baseW * ratioCurrent;
 
-  const targetW = baseSize;
-  const ratio = d.img.height ? d.img.height / d.img.width : 1;
-  const targetH = targetW * ratio;
+    // hover effect only when not transitioning
+    let hovering = false;
+    if (!isTransitioning) {
+      const halfW = baseW * floatScale / 2;
+      const halfH = baseHCurrent * floatScale / 2;
+      hovering =
+        mouseX > cx - halfW && mouseX < cx + halfW &&
+        mouseY > cy - halfH && mouseY < cy + halfH;
+    }
 
-  const halfW = targetW * floatScale / 2;
-  const halfH = targetH * floatScale / 2;
+    const targetHover = hovering ? 1 : 0;
+    hoverAmt = lerp(hoverAmt, targetHover, 0.15);
+    clickAmt = lerp(clickAmt, 0, 0.2);
 
-  const hovering =
-    mouseX > cx - halfW && mouseX < cx + halfW &&
-    mouseY > cy - halfH && mouseY < cy + halfH;
+    imageMode(CENTER);
 
-  const targetHover = hovering ? 1 : 0;
-  hoverAmt = lerp(hoverAmt, targetHover, 0.15); // smooth hover
-  clickAmt = lerp(clickAmt, 0, 0.2);            // ease back after click
+    if (!isTransitioning) {
+      // normal state: just draw the current drink
+      const s = 1.5 * (floatScale + hoverAmt * 0.15 + clickAmt);
+      const drawW = baseW * s;
+      const drawH = baseHCurrent * s;
+      image(dCurrent.img, cx, cy, drawW, drawH);
+    } else {
+      // transition state: slide old one out, new one in
+      const tRaw = (millis() - transitionStart) / transitionDuration;
+      const u = constrain(tRaw, 0, 1);
+      const e = u < 0.5
+        ? 2 * u * u
+        : 1 - pow(-2 * u + 2, 2) / 2; // easeInOutQuad
 
-  const s = 1.5*(floatScale + hoverAmt * 0.15 + clickAmt); // final scale
-  const drawW = targetW * s;
-  const drawH = targetH * s;
+      // direction: +1 swipe up → next drink from below
+      const slideDistance = 250; // px
 
-  imageMode(CENTER);
-  image(d.img, cx, cy, drawW, drawH);
-}
+      // OUTGOING (prev)
+      const dPrev = drinks[prevDrinkIndex];
+      const ratioPrev = dPrev.img.height ? dPrev.img.height / dPrev.img.width : 1;
+      const baseHPrev = baseW * ratioPrev;
+      const sPrev = 1.5 * floatScale;
+      const drawWPrev = baseW * sPrev;
+      const drawHPrev = baseHPrev * sPrev;
 
-  // --- GIFT THIS! clickable text ---
-  textAlign(CENTER, TOP);
-  textFont('Bagel Fat One');
-  textSize(28);
+      const offsetPrevY = -slideDistance * e * transitionDir;
+      const alphaPrev = 255 * (1 - e);
 
-  const giftY = 300; 
-  const w = textWidth(giftText);
-  const h = 32;
+      push();
+      tint(255, alphaPrev);
+      image(dPrev.img, cx, cy + offsetPrevY, drawWPrev, drawHPrev);
+      pop();
 
-  // simple hover effect
-  const hoveringGift =
-    mouseX > (cx - w / 2) &&
-    mouseX < (cx + w / 2) &&
-    mouseY > giftY &&
-    mouseY < giftY + h;
+      // INCOMING (current)
+      const sCur = 1.5 * floatScale;
+      const drawWCur = baseW * sCur;
+      const drawHCur = baseHCurrent * sCur;
 
-  if (hoveringGift) {
-    textStyle(BOLD);
-  } else {
-    textStyle(NORMAL);
+      const offsetCurY = slideDistance * (1 - e) * transitionDir;
+      const alphaCur = 255 * e;
+
+      push();
+      tint(255, alphaCur);
+      image(dCurrent.img, cx, cy + offsetCurY, drawWCur, drawHCur);
+      pop();
+
+      // end transition
+      if (u >= 1) {
+        isTransitioning = false;
+      }
+    }
   }
 
-  fill("#644436");
-  text(giftText, cx, giftY);
-
-  // store hitbox for clicks
-  giftHitbox.x = cx - w / 2;
-  giftHitbox.y = giftY;
-  giftHitbox.w = w;
-  giftHitbox.h = h;
-
-  textStyle(NORMAL);
-
-
-
-
-  // --- CURRENT SUBMISSION DISPLAY  ---
-   if (latestSubmission) drawOrderTexts(latestSubmission.name || "Anonymous");
+  // --- IF THERE IS A SUBMISSION  ---
+   if (latestSubmission) drawOrderTexts(latestSubmission.name);
    else {
       textFont('Courier New'); 
       textAlign(LEFT, TOP);
       textSize(24);   text("waiting for orders...", 50, height - 500)
    }
-
-    drawOrderTexts(latestSubmission?.name || "Anonymous"); 
-
+  drawOrderTexts(latestSubmission?.name); 
 }
+
+// HELPER FUNCTIONS
 
 function easeOutBack(t) {
   const c1 = 1.70158;
@@ -206,34 +259,33 @@ function easeOutBack(t) {
   return 1 + c3 * x * x * x + c1 * x * x;
 }
 
-
 function mousePressed() {
-
-    if (isInGift(mouseX, mouseY)) {
-    handleGiftClick();
-    return; // don’t also treat it as a drink click
-  }
-
-  if (!drinks.length) return;
-
-  const d = drinks[currentDrink];
-  const t = millis() / 1000;
-  const floatScale = 1 + 0.04 * sin(t * 2.0);
-  const targetW = baseSize;
-  const ratio = d.img.height ? d.img.height / d.img.width : 1;
-  const targetH = targetW * ratio;
-
-  const halfW = targetW * floatScale / 2;
-  const halfH = targetH * floatScale / 2;
-  const inside =
-    mouseX > cx - halfW && mouseX < cx + halfW &&
-    mouseY > cy - halfH && mouseY < cy + halfH;
-
-  if (inside) {
-    currentDrink = (currentDrink + 1) % drinks.length;
-    clickAmt = 0.35; // click "pop" amount
+  // Start swipe on drink if pressed on it and not currently transitioning
+  if (!isTransitioning && isInDrink(mouseX, mouseY)) {
+    isDraggingDrink = true;
+    dragStartY = mouseY;
   }
 }
+
+
+function mouseReleased() {
+  if (!isDraggingDrink) return;
+
+  const dy = mouseY - dragStartY;
+  const threshold = 40; // how far you need to move to count as a swipe
+
+  if (Math.abs(dy) < threshold) {
+    // Very small movement → treat as tap on drink → gift it
+    handleGiftClick();
+  } else {
+    // Swipe: one "motion" → one drink change
+    const dir = dy < 0 ? +1 : -1; // swipe up → next, swipe down → previous
+    startDrinkTransition(dir);
+  }
+
+  isDraggingDrink = false;
+}
+
 
 
 function showOrderTexts(displayName) {
@@ -285,15 +337,37 @@ function drawOrderTexts(displayName) {
   }
 }
 
+function isInDrink(x, y) {
+  if (!drinks.length) return false;
 
-function isInGift(x, y) {
+  const d = drinks[currentDrink];
+  const t = millis() / 1000;
+  const floatScale = 1 + 0.04 * sin(t * 2.0);
+
+  const targetW = baseSize;
+  const ratio = d.img.height ? d.img.height / d.img.width : 1;
+  const targetH = targetW * ratio;
+
+  const halfW = (targetW * floatScale) / 2;
+  const halfH = (targetH * floatScale) / 2;
+
   return (
-    x >= giftHitbox.x &&
-    x <= giftHitbox.x + giftHitbox.w &&
-    y >= giftHitbox.y &&
-    y <= giftHitbox.y + giftHitbox.h
+    x > cx - halfW && x < cx + halfW &&
+    y > cy - halfH && y < cy + halfH
   );
 }
+
+function startDrinkTransition(dir) {
+  if (!drinks.length || isTransitioning) return;
+
+  prevDrinkIndex = currentDrink;
+  currentDrink = (currentDrink + dir + drinks.length) % drinks.length;
+
+  transitionDir = dir;       // +1 = swipe up → next, -1 = swipe down → prev
+  isTransitioning = true;
+  transitionStart = millis();
+}
+
 
 function handleGiftClick() {
   const d = drinks[currentDrink]; // { file, name, img }
@@ -303,6 +377,6 @@ function handleGiftClick() {
     drinkIndex: currentDrink
   };
 
-  console.log("Starting gift for:", payload);
+  console.log("Poster: emitting startGift", payload);
   socket.emit('startGift', payload);
 }

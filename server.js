@@ -23,20 +23,20 @@ app.get('/mobile', (req, res) => {
 });
 
 // ---------- SOCKET.IO LOGIC ----------
-
 io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
+  console.log("Client connected:", socket.id);
+
+  socket.on('startGift', (payload) => {
+    console.log("Server: received startGift", payload);
+    io.emit('startGift', payload);  // 🔴 THIS IS CRUCIAL
+  });
 
   socket.on('giftWarmth', (payload) => {
-    console.log('Received giftWarmth from', payload.name, payload.email);
-    // broadcast to everyone (poster + other clients)
+    console.log("Server: received giftWarmth", payload);
     io.emit('giftWarmth', payload);
   });
-
-  socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
-  });
 });
+
 
 // ---------- START SERVER ----------
 
