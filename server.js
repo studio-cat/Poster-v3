@@ -12,26 +12,27 @@ const io = new Server(server);
 const publicPath = path.join(__dirname, 'public');
 app.use(express.static(publicPath));
 
+const BASE_URL = 'https://interactiveposter.onrender.com/assets2/'
 const DRINK_IMAGES = {
-  "Americano": "/assets2/americano.png",
-  "Cinnamon Cappucino": "/assets2/cappucino.png",
-  "Peppermint Hot Chocolate": "/assets2/hotchocolate.png",
-  "Oatmilk Latte": "/assets2/latte.png",
-  "Vanilla Matcha Latte": "/assets2/matcha.png",
-  "Gingerbread Latte": "/assets2/gingerbread.png",
+  "Americano": `${BASE_URL}americano.png`,
+  "Cinnamon Cappucino": `${BASE_URL}cappucino.png`,
+  "Peppermint Hot Chocolate": `${BASE_URL}hotchocolate.png`,
+  "Oatmilk Latte": `${BASE_URL}latte.png`,
+  "Vanilla Matcha Latte": `${BASE_URL}matcha.png`,
+  "Gingerbread Latte": `${BASE_URL}gingerbread.png`
 };
 
 // MAILER
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: process.env.EMAIL_USER, 
-    pass: process.env.EMAIL_PASSWORD,  
+    user: 'catherine.kwon@yale.edu', 
+    pass:'ovlo iljz luta igem',  
   },
 });
 
-console.log("Email user:", process.env.EMAIL_USER);
-console.log("Email pass exists:", !!process.env.EMAIL_PASSWORD);
+// console.log("Email user:", process.env.EMAIL_USER);
+// console.log("Email pass exists:", !!process.env.EMAIL_PASSWORD);
 
 
 // SOCKET.IO LOGIC 
