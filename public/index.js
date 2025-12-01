@@ -20,6 +20,15 @@ let transitionDuration = 500;
 let transitionDir = 0;
 let prevDrinkIndex = 0;
 
+let DRINK_COLORS;
+
+let currentDrinkKey = 'americano';
+
+let prevTitleColor;
+let targetTitleColor;
+let colorBlendStart = 0;
+const COLOR_BLEND_DUR = 500;
+
 // SOCKET.IO SETUP
 const socket = io();
 socket.on('giftWarmth', (data) => {
@@ -92,43 +101,49 @@ function computePositionTiming(lines, baseX, baseY, gapY, delayStepLetter, delay
 
 function animateTitle(letters) {
   const now = millis();
-  const dur = 600; // same as before
+  const dur = 600;
   const tFloat = now / 1000.0;
+
+  const baseColor = getCurrentTitleBaseColor(); // 👈 melt color
 
   letters.forEach(l => {
     const t = now - l.startTime;
-    if (t < 0) return; // not started yet
+    if (t < 0) return;
 
     let s, angle, offsetX = 0, offsetY = 0, alpha = 0;
 
     if (t <= dur) {
-      // ✨ PHASE 1: your original pop-in animation
       const u = constrain(t / dur, 0, 1);
       const ease = easeOutBack(u);
       s = ease;
       angle = l.angleTarget * ease;
-      alpha = map(u, 0, 1, 0, 255);   // fade in as it appears
+      alpha = map(u, 0, 1, 0, 255);
     } else {
-      // 🌊 PHASE 2: floating / wiggling animation
       s = 1;
-
       const tt = tFloat + l.floatPhase;
 
       offsetX = sin(tt * 0.8) * l.floatAmpX;
       offsetY = cos(tt * 0.6) * l.floatAmpY;
-
-      angle = l.angleTarget + sin(tt * 0.7) * l.floatAngleAmp;
-
-      // opacity breathing between 150 and 255
-      alpha = map(sin(tt * 0.9), -1, 1, 255, 255);
+      angle   = l.angleTarget + sin(tt * 0.7) * l.floatAngleAmp;
+      alpha   = map(sin(tt * 0.9), -1, 1, 150, 255);
     }
 
     push();
- 
-      textFont('DynaPuff'); 
-      textStyle(BOLD); 
+
+      textFont('Helvetica');
+            // textFont('DynaPuff');
+
+      textStyle(BOLD);
       textSize(200);
-      fill(85, 50, 8, alpha); // "#553208" with variable alpha
+
+      // combine melted base color + per-letter alpha
+      const c = color(
+        red(baseColor),
+        green(baseColor),
+        blue(baseColor),
+        alpha
+      );
+      fill(c);
 
       translate(l.x + offsetX, l.y - 10 + offsetY);
       scale(s);
@@ -238,6 +253,27 @@ function easeOutBack(t) {
   return 1 + c3 * x * x * x + c1 * x * x;
 }
 
+function setCurrentDrink(drinkKey) {
+  currentDrinkKey = drinkKey;
+
+  const nextColor = DRINK_COLORS[drinkKey] || color('#553208');
+  prevTitleColor  = getCurrentTitleBaseColor(); 
+  targetTitleColor = nextColor;
+  colorBlendStart  = millis();
+}
+
+function getCurrentTitleBaseColor() {
+  if (!prevTitleColor || !targetTitleColor) {
+    return targetTitleColor ;
+  }
+
+  const elapsed = millis() - colorBlendStart;
+  const u = constrain(elapsed / COLOR_BLEND_DUR, 0, 1);
+
+  // lerpColor makes a new color between the two
+  return lerpColor(prevTitleColor, targetTitleColor, u);
+}
+
 // ------------------------------------------------------------------------------------------------------------
 // SETUP & DRAW FUNCTIONS
 // ------------------------------------------------------------------------------------------------------------
@@ -257,12 +293,35 @@ function setup() {
   const delayStepLine   = 300; 
   computePositionTiming(lines, baseX, baseY, gapY, delayStepLetter, delayStepLine)
 
+
+  DRINK_COLORS = {
+    americano: color('#8B4513'),
+    latte:     color('#C89F7B'),
+    matcha:    color('#5C8A3C'),
+    gingerbread:      color('#B26A3C'),
+    hotchoco:  color('#5A3A2E'),
+    cappucino:  color('#D2B48C')
+  };
+
+  targetTitleColor = DRINK_COLORS[currentDrinkKey];
+  prevTitleColor   = targetTitleColor;
+  colorBlendStart  = millis();
+
+socket.on('giftWarmth', (data) => {
+
+    console.log("Poster: received giftWarmth", data);
+    latestSubmission = data;
+    latestSubmission.drink = drinks[currentDrink].name; 
+    showOrderTexts(latestSubmission.name);
+  });
+
 }
 
 function draw() {
 
   // BACKGROUND & CREDITS
   background("#FCF5F0");
+    // background("#ffffffff");
   drawCredits()
 
   // TITLE LETTERS 
@@ -341,6 +400,10 @@ function draw() {
       image(dCurrent.img, cx, cy + offsetCurY, drawWCur, drawHCur);
       pop();
 
+      let drinklist = ['americano', 'cappucino', 'hotchoco','latte', 'matcha', 'gingerbread'];
+      let drinkKey = drinklist[currentDrink];
+      setCurrentDrink(drinkKey);
+
       // end transition
       if (u >= 1) {
         isTransitioning = false;
@@ -349,7 +412,10 @@ function draw() {
   }
 
   // --- IF THERE IS A SUBMISSION  ---
-   if (latestSubmission) drawOrderTexts(latestSubmission.name);
+   if (latestSubmission) {
+    drawOrderTexts(latestSubmission.name);
+   }
+
    else {
       textFont('Courier New'); 
       textAlign(LEFT, TOP);

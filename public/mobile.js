@@ -77,6 +77,8 @@ function touchMoved() {
 function handleSubmit() {
   const name = nameInput.value().trim();
   const email = emailInput.value().trim();
+  const drink = drinkInfo?.drinkName;
+
   const srcCanvas = canvas.elt;
   const tmp = document.createElement('canvas');
   tmp.width  = msgBox.w;
@@ -90,11 +92,12 @@ function handleSubmit() {
   );
 
   const drawingDataURL = tmp.toDataURL('image/png');
-  const payload = { name, email, drawing: drawingDataURL };
+  const payload = { name: name, email: email, drink: drink, image: drawingDataURL };
 
   console.log("sending payload", payload);
   socket.emit('giftWarmth', payload);
   
+  // Clear input fields
  if (nameInput) {
     nameInput.value('');
     if (nameInput.elt) nameInput.elt.value = '';
@@ -109,6 +112,7 @@ function handleSubmit() {
   fill(255);
   rect(msgBox.x, msgBox.y, msgBox.w, msgBox.h, 10);
 }
+
 
 function handleStartGift(data) {
 
@@ -227,8 +231,8 @@ function redrawUI() {
   textStyle(BOLD);
   textSize(16);
   fill("#c47878ff");  text("WRITE OR DRAW MESSAGE", width/2, h_message - 15);
-              text("WHO IS THIS FOR?", width/2, h_name - 20);
-              text("WHAT'S THEIR EMAIL?", width/2, h_email - 20);
+              text("YOUR NAME", width/2, h_name - 20);
+              text("RECIPIENT's EMAIL", width/2, h_email - 20);
   fill(255);  rect(msgBox.x, msgBox.y, msgBox.w, msgBox.h, 10);
 
   image(decoImg, 210, 20, 426,80);

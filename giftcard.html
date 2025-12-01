@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Your Warm ${drink}</title>
+  </head>
+
+
+
+  <body style="margin:0; padding:0; background:#f7dfcc; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;">
+    <table width="100%" cellspacing="0" cellpadding="0" style="padding: 24px 0;">
+      <tr>
+        <td align="center">
+          <table width="420" cellspacing="0" cellpadding="0"
+                 style="background:#fff6ee; border-radius:24px; padding:24px; box-shadow:0 8px 24px rgba(0,0,0,0.08);">
+            <tr>
+              <td align="center" style="padding-bottom:16px;">
+                <div style="font-size:24px; font-weight:700; color:#553208; letter-spacing:0.08em; text-transform:uppercase;">
+                  A Warm Drink For You
+                </div>
+              </td>
+            </tr>
+
+            <tr>
+              <td align="center" style="padding-bottom:8px;">
+                <div style="font-size:16px; color:#8a5a2f;">
+                  ${name ? `${name} just sent you a` : `You’ve received a`}
+                </div>
+              </td>
+            </tr>
+
+            <tr>
+              <td align="center" style="padding-bottom:16px;">
+                <div style="font-size:20px; font-weight:700; color:#553208;">
+                  ${drink || 'Cozy Drink'}
+                </div>
+              </td>
+            </tr>
+
+            <tr>
+              <td align="center" style="padding:12px 0 20px;">
+                <div style="font-size:13px; color:#a1774f; max-width:320px; line-height:1.5;">
+                  A little warmth, a little caffeine, and a reminder that someone’s thinking of you today. 💌
+                </div>
+              </td>
+            </tr>
+
+            ${
+              image
+                ? `
+            <tr>
+              <td align="center" style="padding-bottom:4px;">
+                <img
+                  src="${image}"
+                  alt="Hand-drawn message"
+                  style="max-width:320px; border-radius:18px; border:2px solid #f0d5b9; display:block;"
+                />
+              </td>
+            </tr>
+                `
+                : ''
+            }
+
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
