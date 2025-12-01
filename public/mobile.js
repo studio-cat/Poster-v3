@@ -8,7 +8,28 @@ let nameInput, emailInput, submitButton, msgInput;
 const msgBox = { x: 40, y: h_message, w: 355, h: 245 };
 
 let canvas;
-let socket;
+// let socket;
+
+const socket = io();
+
+socket.on('startGift', (data) => {
+  
+  console.log("startGift received on loading screen:", data);
+
+  // Build URL for mobile.html with a query param
+  const params = new URLSearchParams();
+  if (data.drinkName) {
+    params.set('drink', data.drinkName);
+  }
+  if (data.drinkIndex !== undefined) {
+    params.set('idx', data.drinkIndex);
+  }
+
+  const url = '/mobile.html?' + params.toString();
+
+  // Redirect this phone from loading.html → mobile.html
+  window.location.href = url;
+});
 
 
 // --------------------

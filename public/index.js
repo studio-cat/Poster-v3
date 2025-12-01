@@ -6,11 +6,19 @@ let baseSize = 260;
 let hoverAmt = 0;
 let clickAmt = 0;
 let latestSubmission = null;
+let orderTextStart = 0;
+let orderVisible = false;
 
 const socket = io();
 socket.on('giftWarmth', (data) => {
-  latestSubmission = data;  
+  latestSubmission = data;
+  latestSubmission.drink = drinks[currentDrink].name; // if you want!
+  showOrderTexts(latestSubmission.name || "Anonymous");
 });
+
+
+let giftText = "GIFT THIS!";
+let giftHitbox = { x: 0, y: 0, w: 0, h: 0 };
 
 // --------------------------------------------------------------------------------------------
 
@@ -81,12 +89,13 @@ function draw() {
   // LOGO & CREDITS -----------------
   fill("#644436");
   textFont("sans-serif");
+  textStyle(BOLD);
   textAlign(LEFT, TOP);
-  textSize(24); text("BULLDOG COFFEE COMPANY", 30, 50);
-  textSize(24); text("CITY OF NEW HAVEN", 625, 50);
-  textSize(16);
+  textSize(24); text("BULLDOG COFFEE COMPANY", 30, 30);
+  textSize(24); text("CITY OF NEW HAVEN", 625, 30);
+  textSize(16); textStyle(NORMAL);
   text(
-    "GIFT A CUP® is a collaborative project between BULLDOG COFFEE COMPANY™ and the City of New Haveb aimed at revitalizing the city's coffee market while keeping the community warm during record lows this winter.\n\nDesigned by STUDIOCAT 2025.",
+    "GIFT A CUP® is a collaborative project between BULLDOG COFFEE COMPANY™ and the City of New Haven aimed at revitalizing the city's coffee market while keeping the community warm during record lows this winter.\n\nDesigned by STUDIOCAT 2025.",
     30, 1485, 840
   );
 
@@ -142,36 +151,51 @@ function draw() {
   image(d.img, cx, cy, drawW, drawH);
 }
 
+  // --- GIFT THIS! clickable text ---
+  textAlign(CENTER, TOP);
+  textFont('Bagel Fat One');
+  textSize(28);
 
-  // --- CURRENT SUBMISSION DISPLAY  ---
-  if (latestSubmission) {
+  const giftY = 300; 
+  const w = textWidth(giftText);
+  const h = 32;
 
-    const displayName  = latestSubmission.name  || "Anonymous";
-    // const displayDrink = latestSubmission.drink || "A warm drink";
+  // simple hover effect
+  const hoveringGift =
+    mouseX > (cx - w / 2) &&
+    mouseX < (cx + w / 2) &&
+    mouseY > giftY &&
+    mouseY < giftY + h;
 
-    textFont('sans-serif'); 
-    textAlign(LEFT, TOP);
-    textSize(32);   text('Order received for ' + displayName + '!', 50, height - 500)
-
-    // add delay here.. 
-
-    textSize(32);   text('PACKAGING...' , 50, height - 450)
-    textSize(32);   text('DELIVERING...' , 50, height - 400)
-    textSize(32);   text('SENT! thanks for sharing warmth this winter!' , 50, height - 350)
-
-      // add delay and wipe after some time?
-
-    }
-
-  else{
-    // add a delay here.. 
-    // typing effect animaion?
-    textAlign(LEFT, TOP);
-    textSize(32);   text("waiting for orders...", 50, height - 500)
+  if (hoveringGift) {
+    textStyle(BOLD);
+  } else {
+    textStyle(NORMAL);
   }
 
+  fill("#644436");
+  text(giftText, cx, giftY);
+
+  // store hitbox for clicks
+  giftHitbox.x = cx - w / 2;
+  giftHitbox.y = giftY;
+  giftHitbox.w = w;
+  giftHitbox.h = h;
+
+  textStyle(NORMAL);
 
 
+
+
+  // --- CURRENT SUBMISSION DISPLAY  ---
+   if (latestSubmission) drawOrderTexts(latestSubmission.name || "Anonymous");
+   else {
+      textFont('Courier New'); 
+      textAlign(LEFT, TOP);
+      textSize(24);   text("waiting for orders...", 50, height - 500)
+   }
+
+    drawOrderTexts(latestSubmission?.name || "Anonymous"); 
 
 }
 
@@ -181,7 +205,15 @@ function easeOutBack(t) {
   const x = t - 1;
   return 1 + c3 * x * x * x + c1 * x * x;
 }
+
+
 function mousePressed() {
+
+    if (isInGift(mouseX, mouseY)) {
+    handleGiftClick();
+    return; // don’t also treat it as a drink click
+  }
+
   if (!drinks.length) return;
 
   const d = drinks[currentDrink];
@@ -201,4 +233,76 @@ function mousePressed() {
     currentDrink = (currentDrink + 1) % drinks.length;
     clickAmt = 0.35; // click "pop" amount
   }
+}
+
+
+function showOrderTexts(displayName) {
+  orderTextStart = millis();
+  orderVisible = true;
+  orderVisibleProgress = 0;
+}
+
+function drawOrderTexts(displayName) {
+  if (!orderVisible) return;
+
+  const t = millis() - orderTextStart;
+  const fadeTime = 1000; // 1s for fade in per line
+  const stagger  = 1000; // 1s between line *starts*
+
+  const lines = [
+    'Order received for ' + displayName + '!',
+    'packaging...',
+    'sending...',
+    'delivered! thanks for sharing warmth this winter!'
+  ];
+
+  const totalTime = (lines.length - 1) * stagger + fadeTime;
+  const clearAfter = totalTime + 4000; 
+
+  textFont('Courier New');
+  textAlign(LEFT, TOP);
+  textSize(24);
+  noStroke();
+
+  for (let i = 0; i < lines.length; i++) {
+    const lineStart = i * stagger;
+    const u = constrain((t - lineStart) / fadeTime, 0, 1);
+    const a = 255 * u;
+
+    if (t >= lineStart && t < clearAfter) {
+      fill(100, 68, 54, a); // #644436 but fading
+      if (i === 0) textStyle(BOLD);
+      else textStyle(NORMAL);
+      text(lines[i], 50, height - 500 + i * 50);
+    }
+  }
+
+  textStyle(NORMAL);
+
+  if (t > clearAfter) {
+    latestSubmission = null;
+    orderVisible = false;
+  }
+}
+
+
+function isInGift(x, y) {
+  return (
+    x >= giftHitbox.x &&
+    x <= giftHitbox.x + giftHitbox.w &&
+    y >= giftHitbox.y &&
+    y <= giftHitbox.y + giftHitbox.h
+  );
+}
+
+function handleGiftClick() {
+  const d = drinks[currentDrink]; // { file, name, img }
+
+  const payload = {
+    drinkName: d.name,
+    drinkIndex: currentDrink
+  };
+
+  console.log("Starting gift for:", payload);
+  socket.emit('startGift', payload);
 }
