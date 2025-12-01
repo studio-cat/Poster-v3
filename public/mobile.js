@@ -1,32 +1,33 @@
 // GLOBAL VARIABLES
-let margin = 60;
-let h_name = 400;
-let h_email = h_name + margin;
-let h_message = h_name + margin * 2.5;
-
-let nameInput, emailInput, submitButton, msgInput;
-const msgBox = { x: 40, y: h_message, w: 355, h: 245 };
-
 let canvas;
-
-const socket = io();
-
+ const socket = io();
+let margin = 80;
+let h_name = 430;
+let h_email = h_name + margin;
+let h_message = h_name + margin * 2;
+let nameInput, emailInput, submitButton, msgInput;
+const msgBox = { x: 40, y: h_message, w: 355, h: 200 };
 let drinkInfo = null;
 let drinkImg = null;
 let uiInitialized = false;
 const DRINK_IMAGES = {
-  "Americano": "assets/americano.png",
-  "Cinnamon Cappucino": "assets/cappucino.png",
-  "Peppermint Hot Chocolate": "assets/hotchocolate.png",
-  "Oatmilk Latte": "assets/latte.png",
-  "Vanilla Matcha Latte": "assets/matcha.png",
-  "Gingerbread Latte": "assets/gingerbread.png",
+  "Americano": "assets2/americano.png",
+  "Cinnamon Cappucino": "assets2/cappucino.png",
+  "Peppermint Hot Chocolate": "assets2/hotchocolate.png",
+  "Oatmilk Latte": "assets2/latte.png",
+  "Vanilla Matcha Latte": "assets2/matcha.png",
+  "Gingerbread Latte": "assets2/gingerbread.png",
 };
+let decoImg ;
+function preload() {
+  decoImg = loadImage("assets2/decoration.png");
+}
 
-// --------------------
+// --------------------------------------------------------------------------------------------
 
 function setup() {
-  canvas = createCanvas(426, 874);               // 426 x 874 POSTER SIZE (VERTICAL) 
+  // 426 x 874 MOBILE SIZE (VERTICAL) 
+  canvas = createCanvas(426, 874);               
   pixelDensity(1);
 
   // INITIAL STATE: blank-ish screen with center prompt
@@ -38,17 +39,11 @@ function setup() {
   fill(80);
   text("Choose a drink to gift!", width / 2, height / 2);
 
-  socket.on('connect', () => {
-  console.log("Mobile: connected, id =", socket.id);
-});
-
-socket.on('startGift', (data) => {
-  console.log("Mobile: received startGift", data);
-  handleStartGift(data);
-});
-}
-
-function draw() {
+  // SOCKET.IO SETUP
+  socket.on('startGift', (data) => {
+    console.log("Mobile: received startGift", data);
+    handleStartGift(data);
+    });
   }
 
 // HELPER FUNCTIONS
@@ -76,15 +71,13 @@ function touchMoved() {
     strokeWeight(3);
     line(ptouchX, ptouchY, touchX, touchY);
   }
-  return false; // prevent page scroll
+  return false; 
 }
 
 function handleSubmit() {
   const name = nameInput.value().trim();
   const email = emailInput.value().trim();
-
   const srcCanvas = canvas.elt;
-
   const tmp = document.createElement('canvas');
   tmp.width  = msgBox.w;
   tmp.height = msgBox.h;
@@ -97,7 +90,6 @@ function handleSubmit() {
   );
 
   const drawingDataURL = tmp.toDataURL('image/png');
-
   const payload = { name, email, drawing: drawingDataURL };
 
   console.log("sending payload", payload);
@@ -123,12 +115,10 @@ function handleStartGift(data) {
   drinkInfo = data || {};
   const imgPath = DRINK_IMAGES[drinkInfo.drinkName];
   if (imgPath) {
-    // load image, then init UI once it's ready
     loadImage(imgPath, (img) => {
       drinkImg = img;
-      initUI();   // draw everything + create inputs
+      initUI(); 
     }, () => {
-      // if image fails to load, still init UI without image
       drinkImg = null;
       initUI();
     });
@@ -139,84 +129,107 @@ function handleStartGift(data) {
   }
 }
 
-
 function initUI() {
-  // if (uiInitialized) {
-  //   redrawUI();
-  //   return;
-  // }
 
   uiInitialized = true;
-
-  // Draw full layout
   redrawUI();
 
   // NAME INPUT BOX
   nameInput = createInput('');
-  nameInput.attribute('placeholder', 'who is this for? :)');
-  nameInput.position(100, h_name + 7);
-  nameInput.size(275,25);
+  nameInput.position(40, h_name + 7);
+  nameInput.size(330,25);
   
 
  // EMAIL INPUT BOX
   emailInput = createInput('');
-  emailInput.attribute('placeholder', 'where should we send it?');
-  emailInput.position(100, h_email + 7);
-  emailInput.size(275,25);
+  emailInput.position(40, h_email + 7);
+  emailInput.size(330,25);
 
   // SUBMIT BUTTON
-  submitButton = createButton('Send');
-  submitButton.position(width/2, height - 20);
-  submitButton.mousePressed(handleSubmit);
+  submitButton = createButton('SEND :)');
+  submitButton.position((width-72)/2, height - 50);
+  submitButton.style('background-color', '#a79582ff'); // beige
+  submitButton.style('border', 'none');             // removes outline
+  submitButton.style('outline', 'none');            // extra insurance
+  submitButton.style('color', 'white');             // text white
+  submitButton.style('font-family', 'Helvetica');   // helvetica
+  submitButton.style('font-weight', 'bold');        // bold
+  submitButton.style('padding', '10px 24px');       // nicer proportions
+  submitButton.style('border-radius', '999px');     // pill shaped, super round
+  submitButton.style('cursor', 'pointer');          // feels clickable
+  submitButton.mouseOver(() => submitButton.style('transform', 'scale(1.07)'));
+  submitButton.mouseOut(() => submitButton.style('transform', 'scale(1)'));
+  submitButton.mousePressed(() => {
+    submitButton.style('transform', 'scale(0.95)');
+    submitButton.style('transition', 'transform 0.1s ease');
+  });
+  submitButton.mouseReleased(() => {
+    submitButton.style('transform', 'scale(1.07)');
+  });
+  submitButton.mouseReleased(handleSubmit);
 
-
- [nameInput, emailInput].forEach(inp => inp.addClass("pretty-input"));
-  const style = document.createElement("style");
-  style.innerHTML = `
-    .pretty-input {
-      font-family: sans-serif;
-      font-size: 16px;
-      border: 0px solid #C6A68B;
-      border-radius: 20px;
-      padding: 8px 12px;
-      width: 330px;
-      height: 35px;
-      outline: none;
-      transition: border 0.2s ease, transform 0.2s ease;
-    }
-    .pretty-input:focus {
-      border-color: #8B5E3C;
-      transform: scale(1.02);
-    }
-  `;
-  document.head.appendChild(style);
-}
+  [nameInput, emailInput].forEach(inp => inp.addClass("pretty-input"));
+    const style = document.createElement("style");
+    style.innerHTML = `
+      .pretty-input {
+        font-family: sans-serif;
+        font-size: 16px;
+        border: 0px solid #C6A68B;
+        border-radius: 20px;
+        padding: 8px 12px;
+        width: 330px;
+        height: 35px;
+        outline: none;
+        transition: border 0.2s ease, transform 0.2s ease;
+      }
+      .pretty-input:focus {
+        border-color: #8B5E3C;
+        transform: scale(1.02);
+      }
+    `;
+    document.head.appendChild(style);
+  }
 
 function redrawUI() {
 
   background("#FCF5F0");
+
   noStroke();
 
   if (drinkImg) {
     imageMode(CENTER);
     const imgY = 160;
-    const targetW = 260;
+    const targetW = 180;
     const ratio = drinkImg.height ? drinkImg.height / drinkImg.width : 1;
     const targetH = targetW * ratio;
-    image(drinkImg, width / 2, imgY, targetW, targetH);
+    image(drinkImg, width/2 + 10, imgY+20, targetW, targetH);
 
+    // DRINK NAME
     textAlign(CENTER, TOP);
-    // textFont("DynaPuff");
-    textStyle(NORMAL);
+    textFont("DynaPuff");
+    textStyle(BOLD); 
     textSize(28);
-    fill("#644436");
-    const label = drinkInfo?.drinkName || "Your drink";
-    text(label, width / 2, imgY + targetH / 2 + 16);
+    fill("#7b5d50ff");
+    text(drinkInfo?.drinkName.toUpperCase(), width / 2, imgY + targetH / 2 + 40);
+
+    // COMMENTARY
+    textFont("Helvetica");
+    textStyle(ITALIC);textSize(12);  text("great for the weather!", width / 2, imgY + targetH / 2 + 75);
+    
+    // "YOU SELECTED" LABEL
+    fill("#c47878ff");
+    textStyle(BOLD);  textSize(14);  text("YOU SELECTED", width / 2, imgY - 90);
+
   }
 
-  fill(100);  text("WRITE OR DRAW MESSAGE", 40, h_message - 10);
-              text("NAME", 40, h_name + 25);
-              text("EMAIL", 40, h_email + 25);
+  textAlign(CENTER, CENTER);
+  textFont("Helvetica");
+  textStyle(BOLD);
+  textSize(16);
+  fill("#c47878ff");  text("WRITE OR DRAW MESSAGE", width/2, h_message - 15);
+              text("WHO IS THIS FOR?", width/2, h_name - 20);
+              text("WHAT'S THEIR EMAIL?", width/2, h_email - 20);
   fill(255);  rect(msgBox.x, msgBox.y, msgBox.w, msgBox.h, 10);
 
+  image(decoImg, 210, 20, 426,80);
 }

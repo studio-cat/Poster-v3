@@ -1,7 +1,9 @@
+// GLOBAL VARIABLES
+
 let letters = [];   
 let drinks = [];
 let currentDrink = 0;
-let cx = 650, cy = 600; 
+let cx = 650, cy = 650; 
 let baseSize = 260;  
 let hoverAmt = 0;
 let clickAmt = 0;
@@ -14,23 +16,21 @@ let isDraggingDrink = false;
 let dragStartY = 0;
 let isTransitioning = false;
 let transitionStart = 0;
-let transitionDuration = 500; // ms
-let transitionDir = 0;        // +1 = next, -1 = previous
+let transitionDuration = 500;
+let transitionDir = 0;
 let prevDrinkIndex = 0;
 
+// SOCKET.IO SETUP
 const socket = io();
-
-socket.on('connect', () => {
-    console.log("Main: connected, id =", socket.id);
-  });
-
 socket.on('giftWarmth', (data) => {
   latestSubmission = data;
   latestSubmission.drink = drinks[currentDrink].name; 
   showOrderTexts(latestSubmission.name);
 });
 
+
 // --------------------------------------------------------------------------------------------
+
 
 // LOAD IMAGES
 function preload() {
@@ -63,27 +63,27 @@ function computePositionTiming(lines, baseX, baseY, gapY, delayStepLetter, delay
     for (const ch of line) {
       const w = textWidth(ch);
 
-      // FOR REGULAR CHARACTERS
       if (ch !== " ") {
-
-        // Add: character, x-y position, startTime, targetAngle
         letters.push({
           ch,
           x,
           y,
           startTime: millis() + delay,
-          angleTarget: random(-PI / 32, PI / 32)
+          angleTarget: random(-PI / 32, PI / 32),
+
+          // 🌊 floating-phase params
+          floatPhase: random(TWO_PI),
+          floatAmpX: random(2, 8),
+          floatAmpY: random(2, 10),
+          floatAngleAmp: random(0.02, 0.06)
         });
 
         delay += delayStepLetter;
-      } 
-      
-      // FOR BLANK SPACES
-      else {
+      } else {
         delay += delayStepLetter * 0.3;
       }
 
-      x += 1.7 * w;
+      x += 1.8 * w;
     }
     delay += delayStepLine;
   });
@@ -91,20 +91,46 @@ function computePositionTiming(lines, baseX, baseY, gapY, delayStepLetter, delay
 }
 
 function animateTitle(letters) {
-  textSize(200);
-  fill("#111");
+  const now = millis();
+  const dur = 600; // same as before
+  const tFloat = now / 1000.0;
+
   letters.forEach(l => {
-    const t = millis() - l.startTime;
-    if (t < 0) return;
-    const dur = 600;
-    const u = constrain(t / dur, 0, 1);
-    const s = easeOutBack(u);
-    const angle = l.angleTarget * s;
+    const t = now - l.startTime;
+    if (t < 0) return; // not started yet
+
+    let s, angle, offsetX = 0, offsetY = 0, alpha = 0;
+
+    if (t <= dur) {
+      // ✨ PHASE 1: your original pop-in animation
+      const u = constrain(t / dur, 0, 1);
+      const ease = easeOutBack(u);
+      s = ease;
+      angle = l.angleTarget * ease;
+      alpha = map(u, 0, 1, 0, 255);   // fade in as it appears
+    } else {
+      // 🌊 PHASE 2: floating / wiggling animation
+      s = 1;
+
+      const tt = tFloat + l.floatPhase;
+
+      offsetX = sin(tt * 0.8) * l.floatAmpX;
+      offsetY = cos(tt * 0.6) * l.floatAmpY;
+
+      angle = l.angleTarget + sin(tt * 0.7) * l.floatAngleAmp;
+
+      // opacity breathing between 150 and 255
+      alpha = map(sin(tt * 0.9), -1, 1, 255, 255);
+    }
 
     push();
+ 
+      textFont('DynaPuff'); 
+      textStyle(BOLD); 
       textSize(200);
-      fill("#111");
-      translate(l.x, l.y - 10); // tiny lift
+      fill(85, 50, 8, alpha); // "#553208" with variable alpha
+
+      translate(l.x + offsetX, l.y - 10 + offsetY);
       scale(s);
       rotate(angle);
       text(l.ch, 0, 0);
@@ -127,7 +153,90 @@ function drawCredits() {
   );
 }
 
+function showOrderTexts(displayName) {
+  orderTextStart = millis();
+  orderVisible = true;
+  orderVisibleProgress = 0;
+}
 
+function drawOrderTexts(displayName) {
+  if (!orderVisible) return;
+
+  const t = millis() - orderTextStart;
+  const fadeTime = 1000; 
+  const stagger  = 1000; 
+  const lines = [
+    'Order received for ' + displayName + '!',
+    'packaging...',
+    'sending...',
+    'delivered! thanks for sharing warmth this winter!'
+  ];
+
+  const totalTime = (lines.length - 1) * stagger + fadeTime;
+  const clearAfter = totalTime + 4000; 
+
+  textFont('Courier New');
+  textAlign(LEFT, TOP);
+  textSize(24);
+  noStroke();
+
+  for (let i = 0; i < lines.length; i++) {
+    const lineStart = i * stagger;
+    const u = constrain((t - lineStart) / fadeTime, 0, 1);
+    const a = 255 * u;
+    if (t >= lineStart && t < clearAfter) {
+      fill(100, 68, 54, a);
+      if (i === 0) textStyle(BOLD);
+      else textStyle(NORMAL);
+      text(lines[i], 50, height - 500 + i * 50);
+    }
+  }
+
+  textStyle(NORMAL);
+
+  if (t > clearAfter) {
+    latestSubmission = null;
+    orderVisible = false;
+  }
+}
+
+function isInDrink(x, y) {
+  if (!drinks.length) return false;
+
+  const d = drinks[currentDrink];
+  const t = millis() / 1000;
+  const floatScale = 1 + 0.04 * sin(t * 2.0);
+
+  const targetW = baseSize;
+  const ratio = d.img.height ? d.img.height / d.img.width : 1;
+  const targetH = targetW * ratio;
+
+  const halfW = (targetW * floatScale) / 2;
+  const halfH = (targetH * floatScale) / 2;
+
+  return (
+    x > cx - halfW && x < cx + halfW &&
+    y > cy - halfH && y < cy + halfH
+  );
+}
+
+function startDrinkTransition(dir) {
+  if (!drinks.length || isTransitioning) return;
+
+  prevDrinkIndex = currentDrink;
+  currentDrink = (currentDrink + dir + drinks.length) % drinks.length;
+
+  transitionDir = dir;   
+  isTransitioning = true;
+  transitionStart = millis();
+}
+
+function easeOutBack(t) {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  const x = t - 1;
+  return 1 + c3 * x * x * x + c1 * x * x;
+}
 
 // ------------------------------------------------------------------------------------------------------------
 // SETUP & DRAW FUNCTIONS
@@ -140,10 +249,10 @@ function setup() {
   noStroke();
   textSize(96);
 
-  const lines   = ["GIFT", "a CUP","of", "WARMTH"];
+  const lines   = ["GIFT","a", "CUP","of", "WARMTH"];
   const baseX   = 40;
-  const baseY   = 320;
-  const gapY    = 175;
+  const baseY   = 150;
+  const gapY    = 180;
   const delayStepLetter = 60;  
   const delayStepLine   = 300; 
   computePositionTiming(lines, baseX, baseY, gapY, delayStepLetter, delayStepLine)
@@ -157,9 +266,8 @@ function draw() {
   drawCredits()
 
   // TITLE LETTERS 
-  textSize(200);
-  fill("#111");
   animateTitle(letters)
+
 
   // FLOATING DRINK -----------------
   if (drinks.length > 0) {
@@ -250,127 +358,36 @@ function draw() {
   drawOrderTexts(latestSubmission?.name); 
 }
 
-// HELPER FUNCTIONS
-
-function easeOutBack(t) {
-  const c1 = 1.70158;
-  const c3 = c1 + 1;
-  const x = t - 1;
-  return 1 + c3 * x * x * x + c1 * x * x;
-}
+// ADDITIONAL HELPER FUNCTIONS
 
 function mousePressed() {
-  // Start swipe on drink if pressed on it and not currently transitioning
   if (!isTransitioning && isInDrink(mouseX, mouseY)) {
     isDraggingDrink = true;
     dragStartY = mouseY;
   }
 }
 
-
 function mouseReleased() {
   if (!isDraggingDrink) return;
 
   const dy = mouseY - dragStartY;
-  const threshold = 40; // how far you need to move to count as a swipe
+  const threshold = 40; 
 
+  // BELOW THRESHOLD: TREAT AS TAP = GIFT DRINK
   if (Math.abs(dy) < threshold) {
-    // Very small movement → treat as tap on drink → gift it
     handleGiftClick();
-  } else {
-    // Swipe: one "motion" → one drink change
-    const dir = dy < 0 ? +1 : -1; // swipe up → next, swipe down → previous
+    } 
+  else {
+    // SWIPING MOTION
+    const dir = dy < 0 ? +1 : -1; 
     startDrinkTransition(dir);
   }
 
   isDraggingDrink = false;
 }
 
-
-
-function showOrderTexts(displayName) {
-  orderTextStart = millis();
-  orderVisible = true;
-  orderVisibleProgress = 0;
-}
-
-function drawOrderTexts(displayName) {
-  if (!orderVisible) return;
-
-  const t = millis() - orderTextStart;
-  const fadeTime = 1000; // 1s for fade in per line
-  const stagger  = 1000; // 1s between line *starts*
-
-  const lines = [
-    'Order received for ' + displayName + '!',
-    'packaging...',
-    'sending...',
-    'delivered! thanks for sharing warmth this winter!'
-  ];
-
-  const totalTime = (lines.length - 1) * stagger + fadeTime;
-  const clearAfter = totalTime + 4000; 
-
-  textFont('Courier New');
-  textAlign(LEFT, TOP);
-  textSize(24);
-  noStroke();
-
-  for (let i = 0; i < lines.length; i++) {
-    const lineStart = i * stagger;
-    const u = constrain((t - lineStart) / fadeTime, 0, 1);
-    const a = 255 * u;
-
-    if (t >= lineStart && t < clearAfter) {
-      fill(100, 68, 54, a); // #644436 but fading
-      if (i === 0) textStyle(BOLD);
-      else textStyle(NORMAL);
-      text(lines[i], 50, height - 500 + i * 50);
-    }
-  }
-
-  textStyle(NORMAL);
-
-  if (t > clearAfter) {
-    latestSubmission = null;
-    orderVisible = false;
-  }
-}
-
-function isInDrink(x, y) {
-  if (!drinks.length) return false;
-
-  const d = drinks[currentDrink];
-  const t = millis() / 1000;
-  const floatScale = 1 + 0.04 * sin(t * 2.0);
-
-  const targetW = baseSize;
-  const ratio = d.img.height ? d.img.height / d.img.width : 1;
-  const targetH = targetW * ratio;
-
-  const halfW = (targetW * floatScale) / 2;
-  const halfH = (targetH * floatScale) / 2;
-
-  return (
-    x > cx - halfW && x < cx + halfW &&
-    y > cy - halfH && y < cy + halfH
-  );
-}
-
-function startDrinkTransition(dir) {
-  if (!drinks.length || isTransitioning) return;
-
-  prevDrinkIndex = currentDrink;
-  currentDrink = (currentDrink + dir + drinks.length) % drinks.length;
-
-  transitionDir = dir;       // +1 = swipe up → next, -1 = swipe down → prev
-  isTransitioning = true;
-  transitionStart = millis();
-}
-
-
 function handleGiftClick() {
-  const d = drinks[currentDrink]; // { file, name, img }
+  const d = drinks[currentDrink]; 
 
   const payload = {
     drinkName: d.name,
